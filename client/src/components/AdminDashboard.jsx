@@ -165,7 +165,9 @@ function MapControls() {
 }
 
 const API =
-  "http://localhost:4000" || "https://find-device-server.onrender.com";
+  window.location.hostname === "localhost"
+    ? "http://localhost:4000"
+    : "https://find-device-server.onrender.com";
 
 const AdminDashboard = () => {
   const { user, token, logout } = useAuth();
