@@ -351,7 +351,7 @@ app.post("/api/admin/generate-link", async (req, res) => {
   }
 });
 
-// Redirect short URL
+// Redirect short URL (mobile + desktop friendly)
 app.get("/api/short/:shortCode", async (req, res) => {
   try {
     const { shortCode } = req.params;
@@ -361,8 +361,8 @@ app.get("/api/short/:shortCode", async (req, res) => {
       return res.status(404).send("Link not found or expired");
     }
 
-    // Redirect browser automatically
-    res.redirect(`/${link.linkId}`);
+    // Redirect browser to /track/:linkId
+    res.redirect(`/track/${link.linkId}`);
   } catch (error) {
     res.status(500).send("Server error");
   }
