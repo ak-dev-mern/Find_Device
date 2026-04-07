@@ -1,10 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 
-const API =
-  window.location.hostname === "localhost"
-    ? "http://localhost:4000"
-    : "https://find-device-server.onrender.com";
+const API = "https://find-device-server.onrender.com";
 
 const SilentTracking = () => {
   const { shortCode } = useParams();
