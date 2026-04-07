@@ -358,12 +358,14 @@ app.get("/api/short/:shortCode", async (req, res) => {
     const link = await TrackingLink.findOne({ shortCode, isActive: true });
 
     if (!link || link.expiresAt < new Date()) {
-      return res.status(404).json({ error: "Link not found" });
+      return res.status(404).send("Link not found or expired");
     }
 
-    res.json({ trackingUrl: `/track/${link.linkId}` });
+    // Redirect browser automatically to /track/:linkId
+    res.redirect(`/track/${link.linkId}`);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error(error);
+    res.status(500).send("Server error");
   }
 });
 
@@ -469,7 +471,9 @@ app.post("/api/track-location/:linkId", async (req, res) => {
     console.log(`📍 Location received via API for linkId: ${linkId}`, location);
 
     if (!location || !location.lat || !location.lng) {
-      return res.status(400).json({ success: false, error: "Invalid location" });
+      return res
+        .status(400)
+        .json({ success: false, error: "Invalid location" });
     }
 
     const updatedLocation = {
@@ -484,13 +488,17 @@ app.post("/api/track-location/:linkId", async (req, res) => {
       { linkId, isActive: true },
       {
         $set: { currentLocation: updatedLocation },
-        $push: { locationHistory: { ...updatedLocation, timestamp: new Date() } }
+        $push: {
+          locationHistory: { ...updatedLocation, timestamp: new Date() },
+        },
       },
-      { new: true }
+      { new: true },
     );
 
     if (!updatedLink) {
-      return res.status(404).json({ success: false, error: "Link not found or inactive" });
+      return res
+        .status(404)
+        .json({ success: false, error: "Link not found or inactive" });
     }
 
     console.log(`✅ Database updated for ${updatedLink.personName}`);
