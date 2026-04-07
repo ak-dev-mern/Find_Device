@@ -155,16 +155,17 @@ function MapController({ center, zoom }) {
 function MapControls() {
   const map = useMap();
 
-useEffect(() => {
-  if (map.zoomControl) {
-    map.zoomControl.setPosition("topright");
-  }
-}, [map]);
+  useEffect(() => {
+    if (map.zoomControl) {
+      map.zoomControl.setPosition("topright");
+    }
+  }, [map]);
 
   return null;
 }
 
-const API = "http://localhost:4000";
+const API =
+  "http://localhost:4000" || "https://find-device-server.onrender.com";
 
 const AdminDashboard = () => {
   const { user, token, logout } = useAuth();
