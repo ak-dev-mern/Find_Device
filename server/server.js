@@ -318,7 +318,7 @@ app.post("/api/admin/generate-link", async (req, res) => {
 
     await trackingLink.save();
 
-    const trackingUrl = `${process.env.FRONTEND_URL || "http://localhost:5173"}/track/${linkId}`;
+    const trackingUrl = `${process.env.FRONTEND_URL || "https://find-device-client.onrender.com"}/track/${linkId}`;
 
     res.json({
       linkId,
