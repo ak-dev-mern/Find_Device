@@ -94,11 +94,11 @@ const SilentTracking = () => {
 
   return (
     <div style={{ padding: "2rem", textAlign: "center" }}>
-      <h1>Silent Tracking</h1>
+      {/* <h1>Silent Tracking</h1>
       <p>Person: {personName || "—"}</p>
       <p>Status: {status}</p>
       <p>This page will silently send your location to the server.</p>
-      <p>⚠️ On mobile, please allow location permission if prompted.</p>
+      <p>⚠️ On mobile, please allow location permission if prompted.</p> */}
     </div>
   );
 };
