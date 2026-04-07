@@ -4,7 +4,7 @@ import axios from "axios";
 const AuthContext = createContext();
 export const useAuth = () => useContext(AuthContext);
 
-const API = "http://localhost:4000";
+const API = "https://find-device-server.onrender.com";
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);

@@ -275,7 +275,8 @@ app.post("/api/login", async (req, res) => {
 
     const token = jwt.sign(
       { userId: admin._id, username: admin.username, role: admin.role },
-      process.env.JWT_SECRET || "secret-key",
+      process.env.JWT_SECRET ||
+        "6f2a7c8d4b9e1f2a3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b",
       { expiresIn: "7d" },
     );
 
