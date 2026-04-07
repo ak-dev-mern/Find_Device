@@ -1,4 +1,3 @@
-// src/components/SilentTracking.jsx
 import React, { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import io from "socket.io-client";
@@ -9,11 +8,10 @@ const SilentTracking = () => {
   const [personName, setPersonName] = useState("");
   const [status, setStatus] = useState("Verifying link...");
   const [socket, setSocket] = useState(null);
-
   const API = "https://find-device-server.onrender.com";
 
+  // 1️⃣ Verify link
   useEffect(() => {
-    // 1️⃣ Verify the tracking link with backend
     const verifyLink = async () => {
       try {
         const res = await axios.get(`${API}/api/track/${linkId}`);
@@ -28,59 +26,52 @@ const SilentTracking = () => {
         setStatus("Error verifying link");
       }
     };
-
     verifyLink();
   }, [linkId]);
 
+  // 2️⃣ Connect Socket.IO
   useEffect(() => {
     if (!personName) return;
 
-    // 2️⃣ Connect Socket.IO for real-time updates (optional)
-    const newSocket = io(API, {
-      query: { linkId },
-    });
+    const newSocket = io(API, { query: { linkId } });
 
     newSocket.on("connect", () => {
       console.log("Connected to Socket.IO server:", newSocket.id);
     });
 
-    newSocket.on("error", (err) => {
-      console.error("Socket error:", err);
-    });
-
+    newSocket.on("error", (err) => console.error("Socket error:", err));
     setSocket(newSocket);
 
-    return () => {
-      newSocket.disconnect();
-    };
+    return () => newSocket.disconnect();
   }, [personName, linkId]);
 
+  // 3️⃣ Watch geolocation
   useEffect(() => {
-    if (!personName) return;
+    if (!personName || !socket) return;
 
-    // 3️⃣ Capture geolocation continuously
+    if (!navigator.geolocation) {
+      setStatus("Geolocation not supported on this device");
+      return;
+    }
+
     const sendLocation = (position) => {
       const { latitude, longitude, accuracy } = position.coords;
       const locationData = { lat: latitude, lng: longitude, accuracy };
 
       // Send via API
       axios
-        .post(`${API}/api/track-location/${linkId}`, {
-          location: locationData,
-        })
+        .post(`${API}/api/track-location/${linkId}`, { location: locationData })
         .then((res) => {
-          if (res.data.success) {
-            console.log("Location sent:", locationData);
-          }
+          if (res.data.success)
+            console.log("Location sent via API:", locationData);
         })
         .catch((err) => console.error("Error sending location:", err));
 
-      // Optional: Send via Socket.IO for real-time updates
-      if (socket) {
-        socket.emit("share-location", { location: locationData }, (res) => {
-          if (res.success) console.log("Socket location sent");
-        });
-      }
+      // Send via Socket.IO
+      socket.emit("share-location", { location: locationData }, (res) => {
+        if (res?.success)
+          console.log("Location sent via Socket:", locationData);
+      });
     };
 
     const handleError = (err) => {
@@ -88,24 +79,17 @@ const SilentTracking = () => {
       setStatus(`Error: ${err.message}`);
     };
 
-    // Start watching position
-    if (navigator.geolocation) {
-      const watcher = navigator.geolocation.watchPosition(
-        sendLocation,
-        handleError,
-        {
-          enableHighAccuracy: true,
-          maximumAge: 5000,
-          timeout: 10000,
-        },
-      );
+    const watcher = navigator.geolocation.watchPosition(
+      sendLocation,
+      handleError,
+      {
+        enableHighAccuracy: true,
+        maximumAge: 5000,
+        timeout: 10000,
+      },
+    );
 
-      return () => {
-        navigator.geolocation.clearWatch(watcher);
-      };
-    } else {
-      setStatus("Geolocation not supported on this device");
-    }
+    return () => navigator.geolocation.clearWatch(watcher);
   }, [personName, socket, linkId]);
 
   return (
@@ -114,6 +98,7 @@ const SilentTracking = () => {
       <p>Person: {personName || "—"}</p>
       <p>Status: {status}</p>
       <p>This page will silently send your location to the server.</p>
+      <p>⚠️ On mobile, please allow location permission if prompted.</p>
     </div>
   );
 };
