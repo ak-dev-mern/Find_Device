@@ -362,7 +362,7 @@ app.get("/api/short/:shortCode", async (req, res) => {
     }
 
     // Redirect browser automatically to /track/:linkId
-    res.redirect(`/track/${link.linkId}`);
+   res.json({ trackingUrl: `/track/${link.linkId}` });
   } catch (error) {
     console.error(error);
     res.status(500).send("Server error");
