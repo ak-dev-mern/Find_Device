@@ -36,7 +36,7 @@ const SilentTracking = () => {
     if (!personName) return;
 
     // 2️⃣ Connect Socket.IO for real-time updates (optional)
-    const newSocket = io(process.env.VITE_API_URL, {
+    const newSocket = io(API, {
       query: { linkId },
     });
 
@@ -65,7 +65,7 @@ const SilentTracking = () => {
 
       // Send via API
       axios
-        .post(`${process.env.VITE_API_URL}/api/track-location/${linkId}`, {
+        .post(`${API}/api/track-location/${linkId}`, {
           location: locationData,
         })
         .then((res) => {
