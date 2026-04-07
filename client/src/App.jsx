@@ -8,7 +8,6 @@ import {
 import Login from "./components/Login";
 import AdminDashboard from "./components/AdminDashboard";
 import SilentTracking from "./components/SilentTracking";
-import ShortRedirect from "./components/ShortRedirect";
 import { AuthProvider, useAuth } from "./contexts/AuthContext";
 
 const AdminRoute = ({ children }) => {
@@ -24,7 +23,6 @@ function App() {
         <Routes>
           <Route path="/login" element={<Login />} />
           <Route path="/track/:linkId" element={<SilentTracking />} />
-          <Route path="/l/:shortCode" element={<ShortRedirect />} />
           <Route
             path="/admin"
             element={

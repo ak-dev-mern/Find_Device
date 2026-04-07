@@ -221,7 +221,7 @@ const AdminDashboard = () => {
         await fetchTrackingLinks();
         setShowCreateLink(false);
         setPersonName("");
-        const shareUrl = `${window.location.origin}/l/${data.shortCode}`;
+        const shareUrl = `${window.location.origin}/track/${data.linkId}`;
         navigator.clipboard.writeText(shareUrl);
         setCopiedLink(data.linkId);
         setTimeout(() => setCopiedLink(null), 2000);
@@ -469,8 +469,9 @@ const AdminDashboard = () => {
             </div>
 
             <p className="text-gray-400 text-sm mb-4">
-              Generate a unique short link to share with anyone. When they click
-              it, their location will be shared silently.
+              Generate a unique direct tracking link to share with anyone. When
+              they click it, their location will be shared silently with high
+              accuracy GPS.
             </p>
 
             <input
@@ -689,7 +690,7 @@ const AdminDashboard = () => {
                   const isSelected = selectedPerson === link.linkId;
                   const location = activeLocations[link.linkId]?.location;
                   const accuracy = activeLocations[link.linkId]?.accuracy;
-                  const shortUrl = `${window.location.origin}/l/${link.shortCode}`;
+                  const directUrl = `${window.location.origin}/track/${link.linkId}`;
                   const timeSince = lastUpdateTime[link.linkId]
                     ? Math.floor(
                         (new Date() - lastUpdateTime[link.linkId]) / 1000,
@@ -767,7 +768,7 @@ const AdminDashboard = () => {
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
-                            copyToClipboard(shortUrl, link.linkId);
+                            copyToClipboard(directUrl, link.linkId);
                           }}
                           className="flex-1 flex items-center justify-center gap-1 py-1.5 bg-white/10 hover:bg-white/20 rounded-lg text-xs transition-all group-hover:bg-white/15"
                         >
