@@ -361,10 +361,9 @@ app.get("/api/short/:shortCode", async (req, res) => {
       return res.status(404).send("Link not found or expired");
     }
 
-    // Redirect browser automatically to /track/:linkId
-   res.json({ trackingUrl: `/track/${link.linkId}` });
+    // Redirect browser automatically
+    res.redirect(`/track/${link.linkId}`);
   } catch (error) {
-    console.error(error);
     res.status(500).send("Server error");
   }
 });
