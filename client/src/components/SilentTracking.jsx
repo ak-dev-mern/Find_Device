@@ -10,13 +10,13 @@ const SilentTracking = () => {
   const [status, setStatus] = useState("Verifying link...");
   const [socket, setSocket] = useState(null);
 
+  const API = "https://find-device-server.onrender.com";
+
   useEffect(() => {
     // 1️⃣ Verify the tracking link with backend
     const verifyLink = async () => {
       try {
-        const res = await axios.get(
-          `${process.env.VITE_API_URL}/api/track/${linkId}`,
-        );
+        const res = await axios.get(`${API}/api/track/${linkId}`);
         if (res.data.valid) {
           setPersonName(res.data.personName);
           setStatus("Tracking started...");
